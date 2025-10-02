@@ -10,7 +10,10 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals"),
+  // Extend Next.js defaults and Prettier recommended rules
+  ...compat.extends(["next/core-web-vitals", "plugin:prettier/recommended"]),
+
+  // Files/folders to ignore
   {
     ignores: [
       "node_modules/**",
@@ -19,6 +22,14 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
     ],
+  },
+
+  // Add Prettier plugin rules
+  {
+    plugins: ["prettier"],
+    rules: {
+      "prettier/prettier": "error", // Show Prettier issues as ESLint errors
+    },
   },
 ];
 
