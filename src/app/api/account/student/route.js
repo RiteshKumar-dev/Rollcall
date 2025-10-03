@@ -14,11 +14,11 @@ export async function POST(req) {
       enrollmentNo,
       universityRollNo,
       branch,
+      phone,
       semester,
       year,
       section,
-      startYear,
-      endYear,
+      yearRange,
     } = body;
 
     // Validation
@@ -47,22 +47,33 @@ export async function POST(req) {
       firstname,
       lastname,
       email,
-      phone,
       libraryId,
       enrollmentNo,
       universityRollNo,
       branch,
       semester,
+      phone,
       year,
       section,
-      startYear,
-      endYear,
-      role: "student",
+      yearRange,
     });
 
     return new Response(JSON.stringify({ success: true, message: "Student account created", Student: newStudent }), {
       status: 201,
     });
+  } catch (error) {
+    console.error(error);
+    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
+  }
+}
+
+// GET - Return all students
+export async function GET() {
+  await dbConnect();
+
+  try {
+    const students = await Student.find({});
+    return new Response(JSON.stringify({ success: true, count: students.length, students }), { status: 200 });
   } catch (error) {
     console.error(error);
     return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });

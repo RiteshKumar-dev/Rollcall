@@ -43,7 +43,7 @@ const StudentSchema = new mongoose.Schema(
       required: [true, "Branch is required"],
       trim: true,
     },
-    sem: {
+    semester: {
       type: Number,
       required: [true, "Semester is required"],
       min: [1, "Semester must be at least 1"],
@@ -52,6 +52,11 @@ const StudentSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Year is required"],
       min: [1, "Year must be at least 1"],
+    },
+    phone: {
+      type: String,
+      required: [true, "phone number is required"],
+      match: [/^\d{10}$/, "phone number must be 10 digits"],
     },
     section: {
       type: String,

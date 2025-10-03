@@ -51,3 +51,16 @@ export async function POST(req) {
     return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
   }
 }
+
+// GET - Return all teachers
+export async function GET() {
+  await dbConnect();
+
+  try {
+    const teachers = await Teacher.find({});
+    return new Response(JSON.stringify({ success: true, count: teachers.length, teachers }), { status: 200 });
+  } catch (error) {
+    console.error(error);
+    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
+  }
+}

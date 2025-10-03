@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
 import axios from "axios";
 import { toast } from "sonner";
 import { IconPlus, IconX, IconArrowLeft } from "@tabler/icons-react";
+import { useRouter } from "next/navigation";
 
 export default function Account() {
   const [role, setRole] = useState(null); // teacher/student
   const [loading, setLoading] = useState(false);
+  const [visibleFields, setVisibleFields] = useState(5); // initially show 5 fields
+  const router = useRouter();
 
   // Teacher form state
   const [teacherData, setTeacherData] = useState({
@@ -31,8 +34,9 @@ export default function Account() {
     enrollmentNo: "",
     universityRollNo: "",
     branch: "",
-    sem: "",
+    semester: "",
     year: "",
+    phone: "",
     section: "",
     yearRange: { start: "", end: "" },
   });
@@ -58,6 +62,15 @@ export default function Account() {
       } else {
         setStudentData({ ...studentData, [name]: value });
       }
+    }
+
+    // If user filled all visible fields, show 5 more
+    const currentData = roleType === "teacher" ? teacherData : studentData;
+    const flatValues = Object.values(currentData).flatMap((v) => (typeof v === "object" ? Object.values(v) : v));
+    const filledCount = flatValues.filter((val) => val && val.toString().trim() !== "").length;
+
+    if (filledCount >= visibleFields && visibleFields < flatValues.length) {
+      setVisibleFields((prev) => prev + 5);
     }
   };
 
@@ -99,8 +112,9 @@ export default function Account() {
       enrollmentNo,
       universityRollNo,
       branch,
-      sem,
+      semester,
       year,
+      phone,
       section,
       yearRange,
     } = studentData;
@@ -113,7 +127,8 @@ export default function Account() {
       !enrollmentNo ||
       !universityRollNo ||
       !branch ||
-      !sem ||
+      !semester ||
+      !phone ||
       !year ||
       !section ||
       !yearRange.start ||
@@ -124,6 +139,10 @@ export default function Account() {
     }
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       toast.error("Please enter a valid email.");
+      return false;
+    }
+    if (!/^\d{10}$/.test(phone)) {
+      toast.error("Please enter a valid 10-digit phone number.");
       return false;
     }
     if (isNaN(yearRange.start) || isNaN(yearRange.end) || Number(yearRange.start) > Number(yearRange.end)) {
@@ -148,6 +167,7 @@ export default function Account() {
         await axios.post("/api/account/student", studentData);
         toast.success("Student account submitted successfully!");
       }
+      router.push("/"); // Redirect to home
     } catch (err) {
       console.error(err);
       toast.error("Failed to submit form");
@@ -177,6 +197,39 @@ export default function Account() {
     );
   }
 
+  // Dynamic field rendering
+  const getFields = () => {
+    let fields = [];
+
+    if (role === "teacher") {
+      fields = [
+        { label: "First Name", name: "firstname", value: teacherData.firstname },
+        { label: "Last Name", name: "lastname", value: teacherData.lastname },
+        { label: "Email", name: "email", value: teacherData.email },
+        { label: "Teacher ID", name: "teacherId", value: teacherData.teacherId },
+        { label: "Phone", name: "phone", value: teacherData.phone },
+      ];
+    } else {
+      fields = [
+        { label: "First Name", name: "firstname", value: studentData.firstname },
+        { label: "Last Name", name: "lastname", value: studentData.lastname },
+        { label: "Email", name: "email", value: studentData.email },
+        { label: "Library ID", name: "libraryId", value: studentData.libraryId },
+        { label: "Enrollment No", name: "enrollmentNo", value: studentData.enrollmentNo },
+        { label: "University Roll No", name: "universityRollNo", value: studentData.universityRollNo },
+        { label: "Branch", name: "branch", value: studentData.branch },
+        { label: "Semester", name: "semester", value: studentData.semester },
+        { label: "Year", name: "year", value: studentData.year },
+        { label: "Phone", name: "phone", value: studentData.phone },
+        { label: "Section", name: "section", value: studentData.section },
+        { label: "Year Start", name: "yearStart", value: studentData.yearRange.start },
+        { label: "Year End", name: "yearEnd", value: studentData.yearRange.end },
+      ];
+    }
+
+    return fields.slice(0, visibleFields);
+  };
+
   return (
     <div className="shadow-input mx-auto w-full max-w-md rounded-2xl bg-white p-6 dark:bg-black mt-12">
       <button
@@ -187,54 +240,21 @@ export default function Account() {
       </button>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex gap-2">
-          <LabelInputContainer className="flex-1">
-            <Label htmlFor="firstname">First Name</Label>
+        {getFields().map((field, index) => (
+          <LabelInputContainer key={index}>
+            <Label htmlFor={field.name}>{field.label}</Label>
             <Input
-              id="firstname"
-              name="firstname"
+              id={field.name}
+              name={field.name}
               type="text"
-              value={role === "teacher" ? teacherData.firstname : studentData.firstname}
+              value={field.value}
               onChange={(e) => handleChange(e, role)}
             />
           </LabelInputContainer>
+        ))}
 
-          <LabelInputContainer className="flex-1">
-            <Label htmlFor="lastname">Last Name</Label>
-            <Input
-              id="lastname"
-              name="lastname"
-              type="text"
-              value={role === "teacher" ? teacherData.lastname : studentData.lastname}
-              onChange={(e) => handleChange(e, role)}
-            />
-          </LabelInputContainer>
-        </div>
-
-        <LabelInputContainer>
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            value={role === "teacher" ? teacherData.email : studentData.email}
-            onChange={(e) => handleChange(e, role)}
-          />
-        </LabelInputContainer>
-
-        {role === "teacher" ? (
+        {role === "teacher" && visibleFields >= 5 && (
           <>
-            <LabelInputContainer>
-              <Label htmlFor="teacherId">Teacher ID</Label>
-              <Input
-                id="teacherId"
-                name="teacherId"
-                type="text"
-                value={teacherData.teacherId}
-                onChange={(e) => handleChange(e, "teacher")}
-              />
-            </LabelInputContainer>
-
             <Label className="font-medium">Subjects</Label>
             {teacherData.subjects.map((sub, index) => (
               <div key={index} className="flex gap-2 mb-2">
@@ -252,105 +272,6 @@ export default function Account() {
             <button type="button" onClick={addSubject} className="flex items-center text-blue-500 mb-2 gap-1">
               <IconPlus /> Add Subject
             </button>
-
-            <LabelInputContainer>
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                name="phone"
-                type="text"
-                value={teacherData.phone}
-                onChange={(e) => handleChange(e, "teacher")}
-              />
-            </LabelInputContainer>
-          </>
-        ) : (
-          <>
-            <LabelInputContainer>
-              <Label htmlFor="libraryId">Library ID</Label>
-              <Input
-                id="libraryId"
-                name="libraryId"
-                type="text"
-                value={studentData.libraryId}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label htmlFor="enrollmentNo">Enrollment No</Label>
-              <Input
-                id="enrollmentNo"
-                name="enrollmentNo"
-                type="text"
-                value={studentData.enrollmentNo}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label htmlFor="universityRollNo">University Roll No</Label>
-              <Input
-                id="universityRollNo"
-                name="universityRollNo"
-                type="text"
-                value={studentData.universityRollNo}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label htmlFor="branch">Branch</Label>
-              <Input
-                id="branch"
-                name="branch"
-                type="text"
-                value={studentData.branch}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label htmlFor="sem">Semester</Label>
-              <Input
-                id="sem"
-                name="sem"
-                type="text"
-                value={studentData.sem}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label htmlFor="section">Section</Label>
-              <Input
-                id="section"
-                name="section"
-                type="text"
-                value={studentData.section}
-                onChange={(e) => handleChange(e, "student")}
-              />
-            </LabelInputContainer>
-
-            <LabelInputContainer>
-              <Label className="mb-1">Year Range</Label>
-              <div className="flex gap-2">
-                <Input
-                  name="yearStart"
-                  type="text"
-                  placeholder="Start Year"
-                  value={studentData.yearRange.start}
-                  onChange={(e) => handleChange(e, "student")}
-                />
-                <Input
-                  name="yearEnd"
-                  type="text"
-                  placeholder="End Year"
-                  value={studentData.yearRange.end}
-                  onChange={(e) => handleChange(e, "student")}
-                />
-              </div>
-            </LabelInputContainer>
           </>
         )}
 
