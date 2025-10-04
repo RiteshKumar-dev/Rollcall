@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { toast, Toaster } from "sonner";
 import useUserStore from "../../Store/useUserStore";
+import Cookies from "js-cookie";
 
 const statusColors = {
   Present: "bg-green-200 text-green-800",
@@ -16,8 +17,11 @@ export default function TeacherAttendance() {
   const [loading, setLoading] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState({});
   const user = useUserStore((state) => state.user);
+  const userdetails =
+    useUserStore((state) => state.userdetails) || Cookies.get("userdetails")
+      ? JSON.parse(Cookies.get("userdetails"))
+      : null;
 
-  // Fetch lectures by day when date changes
   useEffect(() => {
     if (!selectedDate) {
       setLectures([]);
@@ -28,8 +32,10 @@ export default function TeacherAttendance() {
     const fetchLectures = async () => {
       setLoading(true);
       try {
-        // Detect day from selected date
-        const day = new Date(selectedDate).toLocaleDateString("en-US", { weekday: "long" });
+        const day = new Date(selectedDate).toLocaleDateString("en-US", {
+          weekday: "long",
+        });
+
         if (!["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)) {
           toast.info("No lectures on weekends");
           setLectures([]);
@@ -37,15 +43,14 @@ export default function TeacherAttendance() {
           return;
         }
 
-        // Fetch lectures for this day
         const { data } = await axios.get(`/api/lectures?day=${day}`);
         if (!data.success || !Array.isArray(data.lectures)) {
           toast.info("No lectures scheduled for this day");
           setLectures([]);
+          setLoading(false);
           return;
         }
 
-        // Attach students to each lecture
         const lecturesWithStudents = [];
         for (const lecture of data.lectures) {
           try {
@@ -53,17 +58,27 @@ export default function TeacherAttendance() {
               `/api/studentsbysection-and-semester?semester=${lecture.semester}&section=${lecture.section}`
             );
             const students = Array.isArray(response.students) ? response.students : [];
-            lecturesWithStudents.push({ ...lecture, students });
+
+            // ✅ Only push lecture if there are students
+            if (students.length > 0) {
+              lecturesWithStudents.push({ ...lecture, students });
+            }
           } catch (error) {
             toast.error(`Failed to load students for ${lecture.name}`);
-            lecturesWithStudents.push({ ...lecture, students: [] });
           }
         }
+
+        // ✅ Filtered out lectures with 0 students
+        if (lecturesWithStudents.length === 0) {
+          toast.info("No lectures with students found for this date");
+        }
+
         setLectures(lecturesWithStudents);
 
-        // Restore or init attendance status
+        // Initialize attendance status
         const saved = JSON.parse(localStorage.getItem(`attendance_${selectedDate}`)) || {};
         const initStatus = { ...saved };
+
         lecturesWithStudents.forEach((lec) => {
           if (!initStatus[lec._id]) initStatus[lec._id] = {};
           lec.students.forEach((stu) => {
@@ -72,9 +87,9 @@ export default function TeacherAttendance() {
             }
           });
         });
-        setAttendanceStatus(initStatus);
 
-        toast.success(`Loaded ${lecturesWithStudents.length} lectures`);
+        setAttendanceStatus(initStatus);
+        toast.success(`Loaded ${lecturesWithStudents.length} valid lectures`);
       } catch (error) {
         console.error(error);
         toast.error("Failed to load lectures");
@@ -93,21 +108,32 @@ export default function TeacherAttendance() {
     }));
   };
 
-  const handleSubmit = async (lectureId) => {
+  // Call this instead of handleSubmit if you want to modify existing attendance
+  const updateAttendance = async (lectureId) => {
     const data = attendanceStatus[lectureId];
     if (!data || Object.keys(data).length === 0) {
-      toast.error("No attendance to save");
+      toast.error("No attendance to update");
       return;
     }
+
     try {
-      await axios.post(`/api/attendance/${lectureId}`, data);
-      toast.success("Saved!");
-      // Save to localStorage
-      const saved = JSON.parse(localStorage.getItem(`attendance_${selectedDate}`)) || {};
-      saved[lectureId] = data;
-      localStorage.setItem(`attendance_${selectedDate}`, JSON.stringify(saved));
-    } catch {
-      toast.error("Save failed");
+      const response = await axios.post(`/api/attendance/${lectureId}`, {
+        date: selectedDate,
+        data, // { studentId: "Present" | "Absent" | "Leave" }
+      });
+
+      if (response.data.success) {
+        toast.success("Attendance updated successfully!");
+        // Update localStorage
+        const saved = JSON.parse(localStorage.getItem(`attendance_${selectedDate}`)) || {};
+        saved[lectureId] = data;
+        localStorage.setItem(`attendance_${selectedDate}`, JSON.stringify(saved));
+      } else {
+        toast.error("Update failed: " + response.data.message);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Server error: Unable to update attendance");
     }
   };
 
@@ -115,7 +141,6 @@ export default function TeacherAttendance() {
     return !attendanceStatus[lectureId] || Object.keys(attendanceStatus[lectureId]).length === 0 || loading;
   };
 
-  // For calendar UX
   const today = new Date().toISOString().split("T")[0];
 
   return (
@@ -128,7 +153,7 @@ export default function TeacherAttendance() {
           <p className="text-base text-gray-600 dark:text-blue-300">
             Logged in as:{" "}
             <span className="font-semibold">
-              {user.firstname} {user.lastname} ({user.teacherId})
+              {userdetails.firstname} {userdetails.lastname} ({userdetails.teacherId})
             </span>
           </p>
         )}
@@ -136,7 +161,6 @@ export default function TeacherAttendance() {
       </div>
 
       <div className="flex justify-center mb-8">
-        {/* Native date input (replace with e.g. react-datepicker for a fancier calendar) */}
         <input
           type="date"
           value={selectedDate}
@@ -149,13 +173,13 @@ export default function TeacherAttendance() {
       </div>
 
       {loading && <div className="text-center text-blue-600">Loading lectures...</div>}
+
       {!loading && lectures.length === 0 && selectedDate && (
         <div className="text-center text-gray-500 dark:text-gray-400">
-          No lectures found for <span className="underline">{selectedDate}</span>.
+          No lectures with students found for <span className="underline">{selectedDate}</span>.
         </div>
       )}
 
-      {/* Lectures Table */}
       <div className="space-y-10">
         {lectures.map((lecture) => (
           <div
@@ -171,6 +195,7 @@ export default function TeacherAttendance() {
                 {lecture.entryTime} — {lecture.leavingTime}
               </div>
             </div>
+
             <div className="p-4">
               <div className="overflow-x-auto rounded">
                 <table className="min-w-full border-collapse">
@@ -205,11 +230,11 @@ export default function TeacherAttendance() {
                 </table>
               </div>
               <button
-                onClick={() => handleSubmit(lecture._id)}
+                onClick={() => updateAttendance(lecture._id)}
                 disabled={isSubmitDisabled(lecture._id)}
                 className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg shadow"
               >
-                Save Attendance
+                Save / Update Attendance
               </button>
             </div>
           </div>

@@ -23,7 +23,7 @@ export function NavbarComponent() {
   const navItems = [
     { name: "Dashboard", link: "/dashboard" },
     { name: "AddLecture", link: "/add-lecture" },
-    { name: "Contact", link: "/contact" },
+    { name: "View Attendance", link: "/view-attendance" },
     { name: "Account", link: "/account" },
   ];
 

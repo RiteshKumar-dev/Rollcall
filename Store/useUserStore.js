@@ -1,4 +1,3 @@
-// store/userStore.js
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import Cookies from "js-cookie";
@@ -7,66 +6,89 @@ import axios from "axios";
 const useUserStore = create(
   persist(
     (set, get) => ({
-      user: null, // will hold full student data
+      user: null,
+      userdetails: null, // synced with user
+      profileType: null,
       token: null,
       loading: false,
 
-      // Set user + auto-fetch full profile if only email/phone is given
+      // Set user + auto-fetch full profile
       setUser: async (user, token) => {
         set({ loading: true });
 
-        // Save token immediately
         if (token) {
           set({ token });
           Cookies.set("token", token, { expires: 21 });
           localStorage.setItem("token", token);
         }
 
-        // If user has email or phone but not full data → fetch it
-        if (user && (user.email || user.phone) && !user.semester) {
+        if (user && (user.email || user.phone)) {
           try {
-            const { email, phone } = user;
-            const res = await axios.get("http://localhost:3000/api/student/profile", {
-              params: { email, phone },
+            const res = await axios.post("/api/getUserDetails", {
+              email: user.email,
+              phone: user.phone,
             });
 
             if (res.data.success) {
-              set({ user: res.data.student }); // save full data
-              Cookies.set("user", JSON.stringify(res.data.student), { expires: 21 });
+              const profile = res.data.profile;
+              const userType = res.data.userType;
+
+              // ✅ Update both user and userdetails in one set()
+              set({
+                user: profile,
+                userdetails: profile,
+                profileType: userType,
+              });
+
+              Cookies.set("userdetails", JSON.stringify(profile), { expires: 21 });
+              Cookies.set("profileType", userType, { expires: 21 });
+            } else {
+              set({ user: null, userdetails: null, profileType: null });
             }
           } catch (err) {
             console.error("Auto-fetch failed:", err);
-            set({ user: null });
+            set({ user: null, userdetails: null, profileType: null });
           }
         } else {
           // Already have full data
-          set({ user });
-          if (user) Cookies.set("user", JSON.stringify(user), { expires: 21 });
+          set({
+            user,
+            userdetails: user,
+            profileType: user?.teacherId ? "teacher" : "student",
+          });
+
+          if (user) {
+            Cookies.set("userdetails", JSON.stringify(user), { expires: 21 });
+            Cookies.set("profileType", user.teacherId ? "teacher" : "student", { expires: 21 });
+          }
         }
 
         set({ loading: false });
       },
 
-      // Clear user and cookies
       clearUser: () => {
-        set({ user: null, token: null });
+        set({ user: null, userdetails: null, token: null, profileType: null });
         Cookies.remove("token");
-        Cookies.remove("user");
+        Cookies.remove("userdetails");
+        Cookies.remove("profileType");
         localStorage.removeItem("token");
       },
 
-      // Manual fetch (e.g., on app load)
       fetchProfile: async () => {
         const token = get().token || Cookies.get("token") || localStorage.getItem("token");
-        const cookieUser = Cookies.get("user");
+        const cookieUser = Cookies.get("userdetails");
+        const cookieProfileType = Cookies.get("profileType");
 
-        // Restore from cookie if available
         if (cookieUser && !get().user) {
           try {
             const parsed = JSON.parse(cookieUser);
-            set({ user: parsed });
+            set({
+              user: parsed,
+              userdetails: parsed,
+              profileType: cookieProfileType || (parsed.teacherId ? "teacher" : "student"),
+            });
           } catch (e) {
-            Cookies.remove("user");
+            Cookies.remove("userdetails");
           }
         }
 
@@ -74,36 +96,55 @@ const useUserStore = create(
 
         set({ loading: true });
         try {
-          const res = await axios.get("http://localhost:3000/api/profile", {
+          const res = await axios.get("/api/profile", {
             headers: { Authorization: `Bearer ${token}` },
           });
-          set({ user: res.data.user });
-          console.log(res.data.user);
-          Cookies.set("user", JSON.stringify(res.data.user), { expires: 21 });
+          if (res.data.success) {
+            const userData = res.data.user;
+            set({
+              user: userData,
+              userdetails: userData,
+              profileType: userData.teacherId ? "teacher" : "student",
+            });
+            Cookies.set("userdetails", JSON.stringify(userData), { expires: 21 });
+            Cookies.set("profileType", userData.teacherId ? "teacher" : "student", { expires: 21 });
+          }
         } catch (err) {
           console.error(err);
-          set({ user: null, token: null });
+          set({ user: null, userdetails: null, token: null, profileType: null });
           Cookies.remove("token");
-          Cookies.remove("user");
+          Cookies.remove("userdetails");
+          Cookies.remove("profileType");
           localStorage.removeItem("token");
         } finally {
           set({ loading: false });
         }
       },
 
-      // Optional: force re-fetch
       refreshUser: async () => {
         const user = get().user;
         if (!user || (!user.email && !user.phone)) return;
 
         set({ loading: true });
         try {
-          const res = await axios.get("http://localhost:3000/api/student/profile", {
-            params: { email: user.email, phone: user.phone },
+          const res = await axios.post("/api/getUserDetails", {
+            email: user.email,
+            phone: user.phone,
           });
+
           if (res.data.success) {
-            set({ user: res.data.student });
-            Cookies.set("user", JSON.stringify(res.data.student), { expires: 21 });
+            const profile = res.data.profile;
+            const userType = res.data.userType;
+
+            // ✅ Single set() to keep everything in sync
+            set({
+              user: profile,
+              userdetails: profile,
+              profileType: userType,
+            });
+
+            Cookies.set("userdetails", JSON.stringify(profile), { expires: 21 });
+            Cookies.set("profileType", userType, { expires: 21 });
           }
         } catch (err) {
           console.error("Refresh failed:", err);
@@ -114,7 +155,7 @@ const useUserStore = create(
     }),
     {
       name: "user-storage",
-      getStorage: () => localStorage, // persists user & token
+      getStorage: () => localStorage,
     }
   )
 );

@@ -62,7 +62,7 @@ export default function Login() {
       if (res.data.success) {
         localStorage.setItem("token", res.data.token);
         Cookies.set("token", res.data.token, { expires: 21, sameSite: "Strict" });
-        setUserStore(null, res.data.token); // set token first
+        setUserStore(res.data.user, res.data.token); // set token first
         await fetchProfile(); // automatically fetch profile and store in Zustand
         toast.success("Login successful");
         router.push("/");
